@@ -9,11 +9,6 @@ import Bitwise
 -- Private
 
 
-type Base85
-    = Encode
-    | Decode
-
-
 mappings : List ( String, String )
 mappings =
     [ ( "", "<~~>" )
@@ -22,6 +17,12 @@ mappings =
     , ( "\x00\x00\x00", "<~!!!!~>" )
     , ( "\x00\x00\x00\x00", "<~z~>" )
     ]
+
+
+rmDelims : String -> String
+rmDelims s =
+    String.dropLeft 2 s
+        |> String.dropRight 2
 
 
 nulls : Dict String String
@@ -40,37 +41,9 @@ addDelimeters s =
     "<~" ++ s ++ "~>"
 
 
-pad : Base85 -> String -> ( Int, String )
-pad b s =
-    let
-        length =
-            String.length s
-    in
-        case b of
-            Encode ->
-                let
-                    padding =
-                        negate length % 4
-                in
-                    if padding > 0 then
-                        ( padding, s ++ String.repeat padding "\x00" )
-                    else
-                        ( 0, s )
-
-            Decode ->
-                let
-                    padding =
-                        negate length % 5
-                in
-                    if padding > 0 then
-                        ( padding, s ++ String.repeat padding "u" )
-                    else
-                        ( 0, s )
-
-
 partition : Int -> List a -> List (List a)
-partition n chars =
-    case chars of
+partition n list =
+    case list of
         [] ->
             []
 
@@ -91,8 +64,8 @@ binconcat xs =
             0
 
 
-binreduce : Int -> String
-binreduce n =
+radixReduce : Int -> String
+radixReduce n =
     if n == 0 then
         "z"
 
@@ -116,18 +89,94 @@ binreduce n =
                 |> String.fromList
 
 
+radixInflate : List Int -> String
+radixInflate ints =
+    case ints of
+        v1::v2::v3::v4::v5::xs ->
+            let
+                w1 = v1 * 85 ^ 4
+                w2 = v2 * 85 ^ 3
+                w3 = v3 * 85 ^ 2
+                w4 = v4 * 85 ^ 1
+                w5 = v5
+                total = w1 + w2 + w3 + w4 + w5
+            in
+                [ Bitwise.and 255 total |> Char.fromCode
+                , Bitwise.shiftRightBy 8 total |> Bitwise.and 255 |> Char.fromCode
+                , Bitwise.shiftRightBy 16 total |> Bitwise.and 255 |> Char.fromCode
+                , Bitwise.shiftRightBy 24 total |> Bitwise.and 255 |> Char.fromCode
+                ] |> List.reverse
+                    |> String.fromList
+        _ ->
+            ""
+
+
+expand : String -> Result String (List Int)
+expand =
+    String.foldl
+        (\c ->
+            Result.andThen
+                (\xs ->
+                    let
+                        code = Char.toCode c
+                    in
+                        if code == 122 then
+                            Ok <| xs ++ List.repeat 5 0
+
+                        else if (code == 32 || code == 10 || code == 13) then
+                            Ok xs
+
+                        else if code < 33 || code > 117 then
+                            Err ("Codepoint out of range." ++ String.fromChar c)
+
+                        else
+                            Ok <| xs ++ [Char.toCode c - 33 ]
+                )
+
+        ) (Ok [])
+
+
 encode_ : String -> String
 encode_ s =
     let
-        ( padding, data ) =
-            pad Encode s
+        padding =
+            negate (String.length s) % 4
+
+        data =
+            s ++ String.repeat padding "\0"
     in
         String.toList data
             |> List.map Char.toCode
             |> partition 4
-            |> List.foldl (\v acc -> acc ++ (binreduce <| binconcat v)) ""
+            |> List.foldl (\v acc -> acc ++ (radixReduce <| binconcat v)) ""
             |> String.dropRight padding
             |> addDelimeters
+
+
+decode_ : String -> Result String String
+decode_ s =
+    let
+        expanded =
+            expand (rmDelims s)
+    in
+        case expanded of
+            Ok xs ->
+                Ok <|
+                    let
+                        padding =
+                            negate (List.length xs) % 5
+
+                        data =
+                            xs ++ List.repeat padding 117
+                    in
+                        partition 5 data
+                            |> List.map radixInflate
+                            |> List.foldl (flip (++)) ""
+                            |> String.dropRight padding
+
+
+            Err e ->
+                Err e
 
 
 encode : String -> String
@@ -142,4 +191,12 @@ encode data =
 
 decode : String -> Result String String
 decode data =
-    Ok data
+    if String.length data < 1 then
+        Ok ""
+    else
+        case Dict.get data nulls_ of
+            Just s ->
+                Ok s
+
+            Nothing ->
+                decode_ data

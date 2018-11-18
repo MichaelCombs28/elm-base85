@@ -13,10 +13,51 @@ more information.
 
 -}
 
+import Bitwise
+import Char
 import Dict exposing (Dict)
 import String
-import Char
-import Bitwise
+
+
+{-| Encodes a string into ascii85 (base85)
+
+    encode "easy" == "<~ARTY*~>"
+
+-}
+encode : String -> String
+encode data =
+    case Dict.get data nulls of
+        Just s ->
+            s
+
+        Nothing ->
+            encode_ data
+
+
+{-| Decodes a string of ascii characters into the original chars.
+Can only be codepoints between 33 - 117 as well as 'z' for compression.
+String to be decoded must include the two delimiters at the start and end of the string
+
+    decode "<~ARTY*~>" == "easy"
+
+-}
+decode : String -> Result String String
+decode data =
+    if String.length data < 1 then
+        Ok ""
+
+    else
+        case Dict.get data nulls_ of
+            Just s ->
+                Ok s
+
+            Nothing ->
+                if String.left 2 data == "<~" && String.right 2 data == "~>" then
+                    decode_ data
+
+                else
+                    Err "Base85 strings require delimiters <~ and ~>"
+
 
 
 -- Private
@@ -25,10 +66,10 @@ import Bitwise
 mappings : List ( String, String )
 mappings =
     [ ( "", "<~~>" )
-    , ( "\x00", "<~!!~>" )
-    , ( "\x00\x00", "<~!!!~>" )
-    , ( "\x00\x00\x00", "<~!!!!~>" )
-    , ( "\x00\x00\x00\x00", "<~z~>" )
+    , ( "\u{0000}", "<~!!~>" )
+    , ( "\u{0000}\u{0000}", "<~!!!~>" )
+    , ( "\u{0000}\u{0000}\u{0000}", "<~!!!!~>" )
+    , ( "\u{0000}\u{0000}\u{0000}\u{0000}", "<~z~>" )
     ]
 
 
@@ -81,37 +122,38 @@ radixReduce : Int -> String
 radixReduce n =
     if n == 0 then
         "z"
+
     else
         let
             v1 =
-                n % 85
+                modBy 85 n
 
             newTot =
                 (n - v1) // 85
 
             v2 =
-                newTot % 85
+                modBy 85 newTot
 
             newTot2 =
                 (newTot - v2) // 85
 
             v3 =
-                newTot2 % 85
+                modBy 85 newTot2
 
             newTot3 =
                 (newTot2 - v3) // 85
 
             v4 =
-                newTot3 % 85
+                modBy 85 newTot3
 
             newTot4 =
                 (newTot3 - v4) // 85
 
             v5 =
-                newTot4 % 85
+                modBy 85 newTot4
         in
-            List.map (Char.fromCode << (+) 33) [ v5, v4, v3, v2, v1 ]
-                |> String.fromList
+        List.map (Char.fromCode << (+) 33) [ v5, v4, v3, v2, v1 ]
+            |> String.fromList
 
 
 radixInflate : List Int -> String
@@ -137,12 +179,12 @@ radixInflate ints =
                 total =
                     w1 + w2 + w3 + w4 + w5
             in
-                [ Bitwise.shiftRightBy 24 total |> Bitwise.and 255 |> Char.fromCode
-                , Bitwise.shiftRightBy 16 total |> Bitwise.and 255 |> Char.fromCode
-                , Bitwise.shiftRightBy 8 total |> Bitwise.and 255 |> Char.fromCode
-                , Bitwise.and 255 total |> Char.fromCode
-                ]
-                    |> String.fromList
+            [ Bitwise.shiftRightBy 24 total |> Bitwise.and 255 |> Char.fromCode
+            , Bitwise.shiftRightBy 16 total |> Bitwise.and 255 |> Char.fromCode
+            , Bitwise.shiftRightBy 8 total |> Bitwise.and 255 |> Char.fromCode
+            , Bitwise.and 255 total |> Char.fromCode
+            ]
+                |> String.fromList
 
         _ ->
             ""
@@ -158,14 +200,17 @@ expand =
                         code =
                             Char.toCode c
                     in
-                        if code == 122 then
-                            Ok <| xs ++ List.repeat 5 0
-                        else if (code == 32 || code == 10 || code == 13) then
-                            Ok xs
-                        else if code < 33 || code > 117 then
-                            Err ("Codepoint out of range." ++ String.fromChar c)
-                        else
-                            Ok <| xs ++ [ Char.toCode c - 33 ]
+                    if code == 122 then
+                        Ok <| xs ++ List.repeat 5 0
+
+                    else if code == 32 || code == 10 || code == 13 then
+                        Ok xs
+
+                    else if code < 33 || code > 117 then
+                        Err ("Codepoint out of range." ++ String.fromChar c)
+
+                    else
+                        Ok <| xs ++ [ Char.toCode c - 33 ]
                 )
         )
         (Ok [])
@@ -175,17 +220,18 @@ encode_ : String -> String
 encode_ s =
     let
         padding =
-            negate (String.length s) % 4
+            negate (String.length s)
+                |> modBy 4
 
         data =
-            s ++ String.repeat padding "\x00"
+            s ++ String.repeat padding "\u{0000}"
     in
-        String.toList data
-            |> List.map Char.toCode
-            |> partition 4
-            |> List.foldl (\v acc -> acc ++ (radixReduce <| binconcat v)) ""
-            |> String.dropRight padding
-            |> addDelimeters
+    String.toList data
+        |> List.map Char.toCode
+        |> partition 4
+        |> List.foldl (\v acc -> acc ++ (radixReduce <| binconcat v)) ""
+        |> String.dropRight padding
+        |> addDelimeters
 
 
 decode_ : String -> Result String String
@@ -194,62 +240,21 @@ decode_ s =
         expanded =
             expand (rmDelims s)
     in
-        case expanded of
-            Ok xs ->
-                Ok <|
-                    let
-                        padding =
-                            negate (List.length xs) % 5
+    case expanded of
+        Ok xs ->
+            Ok <|
+                let
+                    padding =
+                        negate (List.length xs)
+                            |> modBy 5
 
-                        data =
-                            xs ++ List.repeat padding 117
-                    in
-                        partition 5 data
-                            |> List.map radixInflate
-                            |> List.foldl (flip (++)) ""
-                            |> String.dropRight padding
+                    data =
+                        xs ++ List.repeat padding 117
+                in
+                partition 5 data
+                    |> List.map radixInflate
+                    |> List.foldl (\a b -> b ++ a) ""
+                    |> String.dropRight padding
 
-            Err e ->
-                Err e
-
-
-
--- Public Functions
-
-
-{-| Encodes a string into ascii85 (base85)
-
-    encode "easy" == "<~ARTY*~>"
-
--}
-encode : String -> String
-encode data =
-    case Dict.get data nulls of
-        Just s ->
-            s
-
-        Nothing ->
-            encode_ data
-
-
-{-| Decodes a string of ascii characters into the original chars.
-Can only be codepoints between 33 - 117 as well as 'z' for compression.
-String to be decoded must include the two delimiters at the start and end of the string
-
-    decode "<~ARTY*~>" == "easy"
-
--}
-decode : String -> Result String String
-decode data =
-    if String.length data < 1 then
-        Ok ""
-    else
-        case Dict.get data nulls_ of
-            Just s ->
-                Ok s
-
-            Nothing ->
-                if String.left 2 data == "<~" && String.right 2 data == "~>" then
-                    decode_ data
-                else
-                    Err "Base85 strings require delimiters <~ and ~>"
+        Err e ->
+            Err e

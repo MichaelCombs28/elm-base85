@@ -1,10 +1,10 @@
-module Tests exposing (..)
+module Tests exposing (all)
 
-import Test exposing (..)
-import Expect
-import Fuzz exposing (list, int, tuple, string)
-import String
 import Base85
+import Expect
+import Fuzz exposing (int, list, string, tuple)
+import String
+import Test exposing (..)
 
 
 all : Test
@@ -22,44 +22,37 @@ all =
                     Expect.equal
                         (Base85.encode "somewhat difficult")
                         "<~F)Po,GA(E,+Co1uAnbatCif~>"
-
             , test "Empty test" <|
                 \() ->
                     Expect.equal
                         (Base85.encode "")
                         "<~~>"
-
             , test "Single null test" <|
                 \() ->
                     Expect.equal
-                        (Base85.encode "\x00")
+                        (Base85.encode "\u{0000}")
                         "<~!!~>"
-
             , test "Double null test" <|
                 \() ->
                     Expect.equal
-                        (Base85.encode "\0\0")
+                        (Base85.encode "\u{0000}\u{0000}")
                         "<~!!!~>"
-
             , test "Triple null test" <|
                 \() ->
                     Expect.equal
-                        (Base85.encode "\0\0\0")
+                        (Base85.encode "\u{0000}\u{0000}\u{0000}")
                         "<~!!!!~>"
-
             , test "Full null compression test" <|
                 \() ->
                     Expect.equal
-                        (Base85.encode "\0\0\0\0")
+                        (Base85.encode "\u{0000}\u{0000}\u{0000}\u{0000}")
                         "<~z~>"
-
             , test "Leviathan" <|
                 \() ->
                     Expect.equal
                         (Base85.encode "Man is distinguished, not only by his reason, but by this singular passion from other animals, which is a lust of the mind, that by a perseverance of delight in the continued and indefatigable generation of knowledge, exceeds the short vehemence of any carnal pleasure.")
                         "<~9jqo^BlbD-BleB1DJ+*+F(f,q/0JhKF<GL>Cj@.4Gp$d7F!,L7@<6@)/0JDEF<G%<+EV:2F!,O<DJ+*.@<*K0@<6L(Df-\\0Ec5e;DffZ(EZee.Bl.9pF\"AGXBPCsi+DGm>@3BB/F*&OCAfu2/AKYi(DIb:@FD,*)+C]U=@3BN#EcYf8ATD3s@q?d$AftVqCh[NqF<G:8+EV:.+Cf>-FD5W8ARlolDIal(DId<j@<?3r@:F%a+D58'ATD4$Bl@l3De:,-DJs`8ARoFb/0JMK@qB4^F!,R<AKZ&-DfTqBG%G>uD.RTpAKYo'+CT/5+Cei#DII?(E,9)oF*2M7/c~>"
             ]
-
         , describe "Decoding tests"
             [ test "Easy test" <|
                 \() ->
@@ -67,43 +60,36 @@ all =
             , test "Moderate test" <|
                 \() ->
                     Expect.equal (Base85.decode "<~D/WrrEaa'$~>") (Ok "moderate")
-
             , test "Somewhat Difficult" <|
                 \() ->
                     Expect.equal
                         (Base85.decode "<~F)Po,GA(E,+Co1uAnbatCif~>")
                         (Ok "somewhat difficult")
-
             , test "Empty test" <|
                 \() ->
                     Expect.equal
                         (Base85.decode "<~~>")
                         (Ok "")
-
             , test "Single null test" <|
                 \() ->
                     Expect.equal
                         (Base85.decode "<~!!~>")
-                        (Ok "\0")
-
+                        (Ok "\u{0000}")
             , test "Double null test" <|
                 \() ->
                     Expect.equal
                         (Base85.decode "<~!!!~>")
-                        (Ok "\0\0")
-
+                        (Ok "\u{0000}\u{0000}")
             , test "Triple null test" <|
                 \() ->
                     Expect.equal
                         (Base85.decode "<~!!!!~>")
-                        (Ok "\0\0\0")
-
+                        (Ok "\u{0000}\u{0000}\u{0000}")
             , test "Full null compression test" <|
                 \() ->
                     Expect.equal
                         (Base85.decode "<~z~>")
-                        (Ok "\0\0\0\0")
-
+                        (Ok "\u{0000}\u{0000}\u{0000}\u{0000}")
             , test "Leviathan" <|
                 \() ->
                     Expect.equal

@@ -1,5 +1,6 @@
 # Base85
-[![Build Status](https://travis-ci.org/truqu/elm-base64.svg?branch=master)](https://travis-ci.org/MichaelCombs28/elm-base85)
+
+[![Build Status](https://travis-ci.org/MichaelCombs28/elm-base85.svg?branch=master)](https://travis-ci.org/MichaelCombs28/elm-base85)
 
 This library provides you with encoding / decoding of
 [Base85](https://en.wikipedia.org/wiki/Ascii85).
@@ -25,3 +26,4 @@ encode : String -> String
 encode string =
     Base85.encode string
 ```
+

@@ -3,7 +3,7 @@
     "name": "MichaelCombs28/elm-base85",
     "summary": "This library provides you with encoding / decoding of Base85",
     "license": "MIT",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "exposed-modules": [
         "Base85"
     ],
